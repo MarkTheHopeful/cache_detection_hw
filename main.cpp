@@ -83,6 +83,11 @@ bool downward(long long old_time, long long new_time) {
     return (old_time > new_time * coef);
 }
 
+const long double wiggle_coef = 1.15;
+bool are_different(int time_1, int time_2) {
+    return (((long double) max(time_1, time_2)) / min(time_1, time_2)) > wiggle_coef;
+}
+
 vector<int> get_jumps_by_stride(int H, int N) {
     vector<int> jumps_prior;
     int S = 1;
@@ -107,6 +112,17 @@ vector<int> get_jumps_by_stride(int H, int N) {
         prev_time = cur_time;
     }
     return jumps_prior;
+}
+
+long long average_time_all_spots(int H, int L, int N) {
+    int S = 1;
+    long long total_time = 0;
+    while (S < N) {
+        long long spent = perform_iterations(H + L, S);
+        total_time += spent;
+        S++;
+    }
+    return total_time / N;
 }
 
 const int H_PW = 4;
@@ -165,8 +181,8 @@ int main() {
         cerr << (((1LL << i) & ((long long) bytes_buffer_shifted)) >> i);
     }
     cerr << '\n';
-    long long H = H_START;
-    long long N = 256;
+    int H = H_START;
+    int N = 256;
     bool started_jumping = false;
     map<long long, vector<int>> stride_to_jumps;
     while (H * N < BUFFER_MAX_SZ) {
@@ -193,6 +209,58 @@ int main() {
     cout << "Cache size is " << entities[0].first * entities[0].second * sizeof(int) << " bytes\n";
     cout << "Cache associativity is " << entities[0].first << '\n';
 
+    map<int, int> trend;
+    for (H = 1 << 3; H <= 1 << 10; H *= 2) {
+        auto time_only_high = average_time_all_spots(H, 0LL, N);
+        cerr << "Average time with only high stride " << H << ": " << time_only_high << '\n';
 
+        int patterns[] = {0, 0}; // 'Decrease', 'Increase'
+        for (int L = max(1, H >> 4); L < H; L *= 2) {
+            auto time_high_low = average_time_all_spots(H, L, N);
+            cerr << "Average time with low stride " << L << ": " << time_high_low << '\n';
+
+            if (are_different(time_only_high, time_high_low)) {
+                continue;
+            }
+
+            if (time_only_high > time_high_low) {
+                patterns[0]++;
+            } else {
+                patterns[1]++;
+            }
+        }
+
+        int pattern = 0;
+        if (patterns[1] > patterns[0]) {
+            pattern = 1;
+        }
+        if (patterns[0] > patterns[1]) {
+            pattern = 2;
+        }
+        trend[H] = pattern;
+    }
+    cerr << "Trends: \n";
+    for (const auto &e: trend) {
+        cerr << "\tStride " << e.first << ": pattern " << e.second << "\n";
+    }
+
+    int line_size = -1;
+    bool encountered_second = false;
+    for (auto &e: trend) {
+        if (e.second == 2) {
+            encountered_second = true;
+        }
+        if (encountered_second && e.second != 2) {
+            line_size = e.first / 2;
+            break;
+        }
+    }
+
+    if (line_size == -1) {
+        cout << "Failed to estimate cache line size; too bad!\n";
+        return 1;
+    } else {
+        cout << "Cache line size: " << line_size * sizeof(int) << " bytes.\n";
+    }
     return 0;
 }
