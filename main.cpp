@@ -10,11 +10,11 @@ void magic_pinning() {
         exit(1);
     }
 }
-
+using ptr_t = unsigned long long;
 using namespace std;
 
 const int BUFFER_MAX_SZ = (1 << 24);
-int *bytes_buffer_shifted = (int *)mmap(nullptr, BUFFER_MAX_SZ, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGE_1GB, -1, 0);
+ptr_t *bytes_buffer_shifted = (ptr_t *)mmap(nullptr, BUFFER_MAX_SZ, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGE_1GB, -1, 0);
 mt19937_64 rng(566);
 unordered_map<int, vector<int>> orders_memory;
 
@@ -54,7 +54,7 @@ vector<int> get_order(int spots) {
     return orders_memory[spots] = points;
 }
 
-const int ITERS = 1 << 18;
+const int ITERS = 1 << 19;
 
 const long double coef = 1.2;
 
@@ -75,23 +75,33 @@ long long perform_iterations(int stride, int spots) {
     while (converge(results) == -1) {
         results.emplace_back(perform_iterations_raw(stride, spots));
     }
+    if (results.size() > 4) {
+        cerr << "Convergence required: " << results.size() << '\n';
+    }
     return converge(results);
 }
 
 long long perform_iterations_raw(int stride, int spots) {
     vector<int> points = get_order(spots);
     for (int i = 0; i < spots; ++i) {
-        bytes_buffer_shifted[i * stride] = points[i] * stride;
+        bytes_buffer_shifted[i * stride] = (ptr_t)(bytes_buffer_shifted + points[i] * stride);
     }
     auto ptr = bytes_buffer_shifted;
     for (int j = 0; j < ITERS / 8; ++j) {
-        ptr = &bytes_buffer_shifted[*ptr]; // warm up...
+        ptr = (ptr_t *) (*ptr); // warm up...
     }
-    auto t1 = chrono::high_resolution_clock::now();
-    for (int i = 0; i < ITERS; ++i) {
-        ptr = &bytes_buffer_shifted[*ptr];
+    auto t1 = chrono::steady_clock::now();
+    for (int i = 0; i < ITERS / 8; ++i) {
+        ptr = (ptr_t *) (*ptr);
+        ptr = (ptr_t *) (*ptr);
+        ptr = (ptr_t *) (*ptr);
+        ptr = (ptr_t *) (*ptr);
+        ptr = (ptr_t *) (*ptr);
+        ptr = (ptr_t *) (*ptr);
+        ptr = (ptr_t *) (*ptr);
+        ptr = (ptr_t *) (*ptr);
     }
-    auto t2 = chrono::high_resolution_clock::now();
+    auto t2 = chrono::steady_clock::now();
     if (*ptr == 'z') {
         cerr << "Side effect!" << '\n';
     }
@@ -207,11 +217,11 @@ int main() {
         cout << "Wasn't able to find cache, too bad!\n";
         return 1;
     }
-    cout << "Cache size is " << entities[0].first * entities[0].second * sizeof(int) << " bytes\n";
+    cout << "Cache size is " << entities[0].first * entities[0].second * sizeof(ptr_t) << " bytes\n";
     cout << "Cache associativity is " << entities[0].first << '\n';
 
     map<int, int> trend;
-    for (H = 1 << 3; H <= 1 << 10; H *= 2) {
+    for (H = 1 << 2; H <= 1 << 10; H *= 2) {
         auto time_only_high = average_time_all_spots(H, 0LL, N);
         cerr << "Average time with " << H << "+0: " << time_only_high << '\n';
 
@@ -261,7 +271,7 @@ int main() {
         cout << "Failed to estimate cache line size; too bad!\n";
         return 1;
     } else {
-        cout << "Cache line size: " << line_size * sizeof(int) << " bytes.\n";
+        cout << "Cache line size: " << line_size * sizeof(ptr_t) << " bytes.\n";
     }
     return 0;
 }
