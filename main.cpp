@@ -54,14 +54,14 @@ vector<int> get_order(int spots) {
     return orders_memory[spots] = points;
 }
 
-const int ITERS = 1 << 19;
+const int ITERS = 1 << 21;
 
-const long double coef = 1.2;
+const long double coef = 1.18;
 
 long long converge(vector<long long> data) {
     if (data.size() < 4) return -1;
     sort(data.begin(), data.end());
-    int drop = (data.size() - 3) / 2;
+    int drop = (data.size() - 3) / 4;
     if ((long double) data[data.size() - drop - 1] / data[drop] < coef) {
         return (data[data.size() - drop - 1] + data[drop]) / 2;
     }
@@ -75,7 +75,7 @@ long long perform_iterations(int stride, int spots) {
     while (converge(results) == -1) {
         results.emplace_back(perform_iterations_raw(stride, spots));
     }
-    if (results.size() > 4) {
+    if (results.size() > 7) {
         cerr << "Convergence required: " << results.size() << '\n';
     }
     return converge(results);
@@ -84,22 +84,22 @@ long long perform_iterations(int stride, int spots) {
 long long perform_iterations_raw(int stride, int spots) {
     vector<int> points = get_order(spots);
     for (int i = 0; i < spots; ++i) {
-        bytes_buffer_shifted[i * stride] = (ptr_t)(bytes_buffer_shifted + points[i] * stride);
+        bytes_buffer_shifted[i * stride] = reinterpret_cast<ptr_t> (bytes_buffer_shifted + points[i] * stride);
     }
     auto ptr = bytes_buffer_shifted;
     for (int j = 0; j < ITERS / 8; ++j) {
-        ptr = (ptr_t *) (*ptr); // warm up...
+        ptr = reinterpret_cast<ptr_t *>(*ptr); // warm up...
     }
     auto t1 = chrono::steady_clock::now();
     for (int i = 0; i < ITERS / 8; ++i) {
-        ptr = (ptr_t *) (*ptr);
-        ptr = (ptr_t *) (*ptr);
-        ptr = (ptr_t *) (*ptr);
-        ptr = (ptr_t *) (*ptr);
-        ptr = (ptr_t *) (*ptr);
-        ptr = (ptr_t *) (*ptr);
-        ptr = (ptr_t *) (*ptr);
-        ptr = (ptr_t *) (*ptr);
+        ptr = reinterpret_cast<ptr_t *>(*ptr);
+        ptr = reinterpret_cast<ptr_t *>(*ptr);
+        ptr = reinterpret_cast<ptr_t *>(*ptr);
+        ptr = reinterpret_cast<ptr_t *>(*ptr);
+        ptr = reinterpret_cast<ptr_t *>(*ptr);
+        ptr = reinterpret_cast<ptr_t *>(*ptr);
+        ptr = reinterpret_cast<ptr_t *>(*ptr);
+        ptr = reinterpret_cast<ptr_t *>(*ptr);
     }
     auto t2 = chrono::steady_clock::now();
     if (*ptr == 'z') {
@@ -149,7 +149,7 @@ long long average_time_all_spots(int H, int L, int N) {
     return total_time / N;
 }
 
-const int H_PW = 4;
+const int H_PW = 3;
 const int H_START = 1 << H_PW;
 
 bool is_movement(const map<long long, vector<int>> &stride_to_jump, long long cur_stride) {
@@ -221,7 +221,7 @@ int main() {
     cout << "Cache associativity is " << entities[0].first << '\n';
 
     map<int, int> trend;
-    for (H = 1 << 2; H <= 1 << 10; H *= 2) {
+    for (H = 1 << 2; H <= 1 << 8; H *= 2) {
         auto time_only_high = average_time_all_spots(H, 0LL, N);
         cerr << "Average time with " << H << "+0: " << time_only_high << '\n';
 
